@@ -81,8 +81,8 @@ function initMap() {
         })
     };
 
-    // Default to dark theme
-    tileLayers.dark.addTo(map);
+    // Default to OpenStreetMap (no API key ever required)
+    tileLayers.osm.addTo(map);
 
     // Layer control for switching map styles
     L.control.layers({
