@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetTrace Map — Network Traffic Visualization</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="app">
+        <!-- Map container -->
+        <div id="map"></div>
+
+        <!-- Side panel -->
+        <div id="sidebar">
+            <div id="sidebar-header">
+                <h1>NetTrace Map</h1>
+                <p class="subtitle">Network Traffic Visualization</p>
+                <div id="connection-status" class="status-disconnected">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+            </div>
+
+            <!-- Stats section -->
+            <div id="stats" class="sidebar-section">
+                <h2>Statistics</h2>
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Flows</span>
+                        <span class="stat-value" id="stat-total-flows">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Bytes</span>
+                        <span class="stat-value" id="stat-total-bytes">0 B</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Active Clients</span>
+                        <span class="stat-value" id="stat-clients">0</span>
+                    </div>
+                </div>
+
+                <h3>Protocol Breakdown</h3>
+                <div id="protocol-breakdown"></div>
+
+                <h3>Top Destinations</h3>
+                <div id="top-destinations"></div>
+            </div>
+
+            <!-- Live flows -->
+            <div id="flows-section" class="sidebar-section">
+                <h2>Live Flows</h2>
+                <div id="flow-list"></div>
+            </div>
+
+            <!-- Legend -->
+            <div id="legend" class="sidebar-section">
+                <h2>Legend</h2>
+                <div class="legend-item"><span class="legend-dot" style="background:#9b59b6"></span> BGP</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#2ecc71"></span> HTTP/HTTPS</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#e67e22"></span> SSH</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#3498db"></span> Game Traffic</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#f1c40f"></span> DNS</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ecf0f1"></span> Other</div>
+            </div>
+
+            <!-- Controls -->
+            <div id="controls" class="sidebar-section">
+                <h2>Controls</h2>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-cables" checked />
+                    Submarine Cables
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-landing" />
+                    Landing Points
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-bgp" checked />
+                    BGP Peers
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-machines" checked />
+                    Infrastructure Markers
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- App logic -->
+    <script src="app.js"></script>
+</body>
+</html>

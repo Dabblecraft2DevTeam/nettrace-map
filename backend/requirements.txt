@@ -1,0 +1,15 @@
+# NetTrace Map — Backend Requirements
+
+# Core
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+
+# MaxMind GeoLite2 geolocation
+geoip2>=4.8.0
+
+# Optional: full NetFlow v9/v5 parsing library
+# Install if you want more robust NetFlow template handling:
+#   pip install netflow-parser
+# or
+#   pip install flow-records
