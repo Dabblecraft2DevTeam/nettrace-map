@@ -18,6 +18,14 @@ let activeAnimations = [];  // Currently animating packet dots
 let protocolColors = {};
 let maxSimultaneousAnimations = 50;
 
+// Cluster state
+let clustersData = {};         // cluster name -> cluster dict from backend
+let activeClusterName = null;  // currently displayed cluster
+let clusterVmPositions = {};   // cluster name -> { ip -> {x, y, name, role} }
+let clusterSvgRoot = null;     // current SVG element for the active cluster
+let clusterPacketAnimations = []; // active in-cluster packet animations
+let maxClusterPackets = 30;
+
 // ---------------------------------------------------------------------------
 // Protocol colors (fallback if not received from server)
 // ---------------------------------------------------------------------------
@@ -29,6 +37,9 @@ const FALLBACK_COLORS = {
     "SSH":       "#e67e22",
     "MINECRAFT": "#3498db",
     "DNS":       "#f1c40f",
+    "MYSQL":     "#e74c3c",
+    "REDIS":     "#c0392b",
+    "POSTGRES":  "#e08e0b",
     "OTHER":     "#ecf0f1",
 };
 
@@ -437,8 +448,448 @@ function updateStats(stats) {
 }
 
 // ---------------------------------------------------------------------------
-// Utilities
+// Cluster visualization — virtual server box with internal VM nodes
 // ---------------------------------------------------------------------------
+
+/**
+ * Render the cluster selector buttons in the sidebar.
+ * Clicking a button opens the cluster overlay panel.
+ */
+function renderClusterButtons() {
+    const container = document.getElementById('cluster-buttons');
+    if (!container) return;
+    container.innerHTML = '';
+
+    Object.entries(clustersData).forEach(([name, cluster]) => {
+        const btn = document.createElement('button');
+        btn.className = 'cluster-btn';
+        btn.dataset.clusterName = name;
+        const vmCount = cluster.vms ? cluster.vms.length : 0;
+        btn.innerHTML = `<div class="cluster-btn-name">${cluster.name || name}</div>`
+            + `<div class="cluster-btn-meta">${vmCount} VM${vmCount !== 1 ? 's' : ''} · ${cluster.location || ''}</div>`;
+        btn.addEventListener('click', () => openCluster(name));
+        container.appendChild(btn);
+    });
+
+    if (Object.keys(clustersData).length === 0) {
+        container.innerHTML = '<div style="color:#666;font-size:11px;">No clusters configured</div>';
+    }
+}
+
+/**
+ * Open the cluster overlay panel and render the diagram.
+ */
+function openCluster(name) {
+    const cluster = clustersData[name];
+    if (!cluster) return;
+
+    activeClusterName = name;
+
+    // Update sidebar button states
+    document.querySelectorAll('.cluster-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.clusterName === name);
+    });
+
+    // Update title
+    document.getElementById('cluster-title').textContent = cluster.name || name;
+
+    // Render the SVG diagram
+    renderClusterDiagram(name, cluster);
+
+    // Show the overlay
+    document.getElementById('cluster-overlay').classList.remove('hidden');
+}
+
+/**
+ * Close the cluster overlay panel.
+ */
+function closeCluster() {
+    document.getElementById('cluster-overlay').classList.add('hidden');
+    activeClusterName = null;
+    clusterSvgRoot = null;
+    // Clear in-cluster animations
+    clusterPacketAnimations.forEach(a => { if (a.cancel) a.cancel(); });
+    clusterPacketAnimations = [];
+    document.querySelectorAll('.cluster-btn').forEach(b => b.classList.remove('active'));
+}
+
+/**
+ * Layout VM nodes inside the cluster SVG.
+ * Router (OPNsense) is placed at the left edge of the box.
+ * Other VMs are arranged in a grid to the right.
+ *
+ * Returns a dict: ip -> {x, y, w, h, name, role, isRouter}
+ */
+function layoutClusterVMs(cluster) {
+    const vms = cluster.vms || [];
+    const positions = {};
+
+    // Find the router VM (OPNsense edge)
+    const edgeIp = cluster.edge_ip;
+    let routerVm = null;
+    const otherVms = [];
+    vms.forEach(vm => {
+        if (vm.role && /OPNsense|Edge|Router/i.test(vm.role)) {
+            routerVm = vm;
+        } else if (edgeIp && vm.ip === edgeIp) {
+            routerVm = vm;
+        } else {
+            otherVms.push(vm);
+        }
+    });
+    // If no router found, use first VM as edge
+    if (!routerVm && vms.length > 0) routerVm = vms[0];
+
+    const nodeW = 110;
+    const nodeH = 54;
+    const gapX = 24;
+    const gapY = 18;
+    const routerX = 30;
+    const routerY = 160;
+
+    if (routerVm) {
+        positions[routerVm.ip] = {
+            x: routerX, y: routerY, w: nodeW, h: nodeH,
+            name: routerVm.name, role: routerVm.role,
+            ram: routerVm.ram, isRouter: true,
+        };
+    }
+
+    // Arrange other VMs in 2 columns
+    const cols = 2;
+    const startX = 190;
+    const startY = 40;
+    otherVms.forEach((vm, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        positions[vm.ip] = {
+            x: startX + col * (nodeW + gapX),
+            y: startY + row * (nodeH + gapY),
+            w: nodeW, h: nodeH,
+            name: vm.name, role: vm.role,
+            ram: vm.ram, isRouter: false,
+        };
+    });
+
+    return positions;
+}
+
+/**
+ * Render the cluster SVG diagram with VM nodes inside a dashed box.
+ */
+function renderClusterDiagram(name, cluster) {
+    const diagramDiv = document.getElementById('cluster-diagram');
+    const positions = layoutClusterVMs(cluster);
+    clusterVmPositions[name] = positions;
+
+    // Compute SVG canvas size
+    const allPos = Object.values(positions);
+    const maxX = allPos.length ? Math.max(...allPos.map(p => p.x + p.w)) : 400;
+    const maxY = allPos.length ? Math.max(...allPos.map(p => p.y + p.h)) : 300;
+    const padRight = 30;
+    const padBottom = 30;
+    const svgW = Math.max(520, maxX + padRight);
+    const svgH = Math.max(380, maxY + padBottom);
+
+    // Build SVG
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'cluster-svg');
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    // Background box (virtual server container)
+    const boxX = 15, boxY = 15;
+    const boxW = svgW - 30, boxH = svgH - 30;
+    const boxRect = document.createElementNS(ns, 'rect');
+    boxRect.setAttribute('class', 'cluster-box-rect');
+    boxRect.setAttribute('x', boxX);
+    boxRect.setAttribute('y', boxY);
+    boxRect.setAttribute('width', boxW);
+    boxRect.setAttribute('height', boxH);
+    boxRect.setAttribute('rx', 10);
+    boxRect.setAttribute('ry', 10);
+    svg.appendChild(boxRect);
+
+    // Box label (top-left)
+    const boxLabel = document.createElementNS(ns, 'text');
+    boxLabel.setAttribute('class', 'cluster-box-label');
+    boxLabel.setAttribute('x', boxX + 12);
+    boxLabel.setAttribute('y', boxY + 22);
+    boxLabel.textContent = cluster.name || name;
+    svg.appendChild(boxLabel);
+
+    // Edge label (public IP)
+    if (cluster.edge_ip) {
+        const edgeLabel = document.createElementNS(ns, 'text');
+        edgeLabel.setAttribute('class', 'cluster-edge-label');
+        edgeLabel.setAttribute('x', boxX + 12);
+        edgeLabel.setAttribute('y', boxY + 36);
+        edgeLabel.textContent = `Edge: ${cluster.edge_ip}`;
+        svg.appendChild(edgeLabel);
+    }
+
+    // Draw faint internal flow reference lines (router -> each VM)
+    const routerPos = Object.values(positions).find(p => p.isRouter);
+    if (routerPos) {
+        Object.values(positions).forEach(p => {
+            if (p.isRouter) return;
+            const line = document.createElementNS(ns, 'line');
+            line.setAttribute('class', 'internal-flow-line');
+            line.setAttribute('x1', routerPos.x + routerPos.w);
+            line.setAttribute('y1', routerPos.y + routerPos.h / 2);
+            line.setAttribute('x2', p.x);
+            line.setAttribute('y2', p.y + p.h / 2);
+            svg.appendChild(line);
+        });
+    }
+
+    // Draw VM nodes
+    Object.entries(positions).forEach(([ip, pos]) => {
+        const g = document.createElementNS(ns, 'g');
+        g.setAttribute('class', pos.isRouter ? 'vm-node vm-node-router' : 'vm-node');
+        g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+
+        // Rect
+        const rect = document.createElementNS(ns, 'rect');
+        rect.setAttribute('class', 'vm-node-rect');
+        rect.setAttribute('x', 0);
+        rect.setAttribute('y', 0);
+        rect.setAttribute('width', pos.w);
+        rect.setAttribute('height', pos.h);
+        rect.setAttribute('rx', 6);
+        rect.setAttribute('ry', 6);
+        g.appendChild(rect);
+
+        // Title
+        const title = document.createElementNS(ns, 'text');
+        title.setAttribute('class', 'vm-node-title');
+        title.setAttribute('x', pos.w / 2);
+        title.setAttribute('y', 18);
+        // Shorten name for display
+        let displayName = pos.name.replace(/^GC02-/, '');
+        if (displayName.length > 14) displayName = displayName.substring(0, 13) + '…';
+        title.textContent = displayName;
+        g.appendChild(title);
+
+        // Role
+        const role = document.createElementNS(ns, 'text');
+        role.setAttribute('class', 'vm-node-role');
+        role.setAttribute('x', pos.w / 2);
+        role.setAttribute('y', 32);
+        let roleText = pos.role || '';
+        if (roleText.length > 16) roleText = roleText.substring(0, 15) + '…';
+        role.textContent = roleText;
+        g.appendChild(role);
+
+        // IP
+        const ipText = document.createElementNS(ns, 'text');
+        ipText.setAttribute('class', 'vm-node-ip');
+        ipText.setAttribute('x', pos.w / 2);
+        ipText.setAttribute('y', 46);
+        ipText.textContent = ip;
+        g.appendChild(ipText);
+
+        // Router badge
+        if (pos.isRouter) {
+            const badge = document.createElementNS(ns, 'text');
+            badge.setAttribute('class', 'vm-node-badge');
+            badge.setAttribute('x', pos.w / 2);
+            badge.setAttribute('y', -4);
+            badge.textContent = 'EDGE';
+            g.appendChild(badge);
+        }
+
+        // Tooltip via title
+        const ttlelem = document.createElementNS(ns, 'title');
+        ttlelem.textContent = `${pos.name}\n${pos.role || ''}\n${ip}${pos.ram ? ' · ' + pos.ram : ''}`;
+        g.appendChild(ttlelem);
+
+        svg.appendChild(g);
+    });
+
+    diagramDiv.innerHTML = '';
+    diagramDiv.appendChild(svg);
+    clusterSvgRoot = svg;
+}
+
+/**
+ * Get the center point of a VM node in the active cluster SVG coordinates.
+ */
+function getVmCenter(ip) {
+    if (!activeClusterName) return null;
+    const positions = clusterVmPositions[activeClusterName];
+    if (!positions || !positions[ip]) return null;
+    const p = positions[ip];
+    return { x: p.x + p.w / 2, y: p.y + p.h / 2 };
+}
+
+/**
+ * Animate a packet inside the cluster diagram based on flow data.
+ * - enters_cluster: external -> internal VM (router -> VM arrow)
+ * - internal_flow: VM -> VM inside same cluster
+ */
+function animateClusterPacket(flow) {
+    if (!activeClusterName || !clusterSvgRoot) return;
+
+    const overlay = document.getElementById('cluster-overlay');
+    if (overlay.classList.contains('hidden')) return;
+
+    // Enforce max simultaneous in-cluster animations
+    if (clusterPacketAnimations.length >= maxClusterPackets) {
+        const oldest = clusterPacketAnimations.shift();
+        if (oldest && oldest.cancel) oldest.cancel();
+    }
+
+    const color = protoColor(flow.protocol);
+    const ns = 'http://www.w3.org/2000/svg';
+
+    let fromPos = null;
+    let toPos = null;
+    let label = '';
+
+    if (flow.internal_flow && flow.src_vm && flow.dst_vm
+        && flow.src_vm.cluster === activeClusterName
+        && flow.dst_vm.cluster === activeClusterName) {
+        // Internal VM-to-VM flow
+        fromPos = getVmCenter(flow.src_vm.ip);
+        toPos = getVmCenter(flow.dst_vm.ip);
+        label = 'internal';
+    } else if (flow.enters_cluster && flow.dst_vm
+               && flow.dst_vm.cluster === activeClusterName) {
+        // External -> internal VM: route through router
+        const routerPos = Object.values(clusterVmPositions[activeClusterName])
+            .find(p => p.isRouter);
+        if (routerPos) {
+            fromPos = { x: routerPos.x + routerPos.w / 2, y: routerPos.y + routerPos.h / 2 };
+        }
+        toPos = getVmCenter(flow.dst_vm.ip);
+        label = 'external';
+    } else {
+        return; // Not relevant to this cluster
+    }
+
+    if (!fromPos || !toPos) return;
+    if (fromPos.x === toPos.x && fromPos.y === toPos.y) return;
+
+    // Create trail path (straight line with slight curve)
+    const midX = (fromPos.x + toPos.x) / 2;
+    const midY = (fromPos.y + toPos.y) / 2;
+    const dx = toPos.x - fromPos.x;
+    const dy = toPos.y - fromPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const offset = dist * 0.12;
+    // Perpendicular offset
+    const perpAngle = Math.atan2(dy, dx) + Math.PI / 2;
+    const ctrlX = midX + Math.cos(perpAngle) * offset;
+    const ctrlY = midY + Math.sin(perpAngle) * offset;
+
+    const pathD = `M ${fromPos.x} ${fromPos.y} Q ${ctrlX} ${ctrlY} ${toPos.x} ${toPos.y}`;
+
+    // Trail
+    const trail = document.createElementNS(ns, 'path');
+    trail.setAttribute('class', 'cluster-packet-trail');
+    trail.setAttribute('d', pathD);
+    trail.setAttribute('stroke', color);
+    trail.setAttribute('stroke-width', 1.5);
+    clusterSvgRoot.appendChild(trail);
+
+    // Packet dot
+    const radius = Math.max(2.5, Math.min(6, 2.5 + Math.log10(Math.max(flow.bytes, 1)) * 0.5));
+    const dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('class', 'cluster-packet-dot');
+    dot.setAttribute('cx', fromPos.x);
+    dot.setAttribute('cy', fromPos.y);
+    dot.setAttribute('r', radius);
+    dot.setAttribute('fill', color);
+    dot.style.filter = `drop-shadow(0 0 ${radius * 2}px ${color})`;
+    clusterSvgRoot.appendChild(dot);
+
+    // Arrowhead at destination
+    const arrow = document.createElementNS(ns, 'polygon');
+    arrow.setAttribute('class', 'cluster-packet-dot');
+    arrow.setAttribute('fill', color);
+    arrow.setAttribute('opacity', '0');
+    clusterSvgRoot.appendChild(arrow);
+
+    let cancelled = false;
+    const anim = {
+        cancel: function() {
+            cancelled = true;
+            if (trail.parentNode) trail.parentNode.removeChild(trail);
+            if (dot.parentNode) dot.parentNode.removeChild(dot);
+            if (arrow.parentNode) arrow.parentNode.removeChild(arrow);
+        }
+    };
+    clusterPacketAnimations.push(anim);
+
+    // Animate
+    const duration = Math.max(600, Math.min(2000, dist * 3));
+    const startTime = performance.now();
+
+    function frame(now) {
+        if (cancelled) return;
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        // Quadratic bezier point
+        const u = 1 - eased;
+        const x = u * u * fromPos.x + 2 * u * eased * ctrlX + eased * eased * toPos.x;
+        const y = u * u * fromPos.y + 2 * u * eased * ctrlY + eased * eased * toPos.y;
+        dot.setAttribute('cx', x);
+        dot.setAttribute('cy', y);
+
+        // Fade trail
+        trail.style.opacity = String(0.3 * (1 - t * 0.6));
+
+        // Show arrowhead near end
+        if (t > 0.85) {
+            arrow.setAttribute('opacity', String((t - 0.85) / 0.15));
+            // Arrow direction
+            const ax = toPos.x, ay = toPos.y;
+            // Tangent at t=1: direction from ctrl to end
+            const tdx = toPos.x - ctrlX;
+            const tdy = toPos.y - ctrlY;
+            const tlen = Math.sqrt(tdx * tdx + tdy * tdy) || 1;
+            const ux = tdx / tlen, uy = tdy / tlen;
+            const sz = 5;
+            const p1x = ax, p1y = ay;
+            const p2x = ax - ux * sz + uy * sz * 0.5;
+            const p2y = ay - uy * sz - ux * sz * 0.5;
+            const p3x = ax - ux * sz - uy * sz * 0.5;
+            const p3y = ay - uy * sz + ux * sz * 0.5;
+            arrow.setAttribute('points', `${p1x},${p1y} ${p2x},${p2y} ${p3x},${p3y}`);
+        }
+
+        if (t < 1) {
+            requestAnimationFrame(frame);
+        } else {
+            // Fade out and clean up
+            let fadeT = 0;
+            function fadeOut() {
+                if (cancelled) return;
+                fadeT += 0.05;
+                const op = Math.max(0, 1 - fadeT);
+                dot.style.opacity = String(op);
+                trail.style.opacity = String(0.12 * op);
+                arrow.style.opacity = String(op * 0.6);
+                if (fadeT < 1) {
+                    requestAnimationFrame(fadeOut);
+                } else {
+                    if (trail.parentNode) trail.parentNode.removeChild(trail);
+                    if (dot.parentNode) dot.parentNode.removeChild(dot);
+                    if (arrow.parentNode) arrow.parentNode.removeChild(arrow);
+                    const idx = clusterPacketAnimations.indexOf(anim);
+                    if (idx >= 0) clusterPacketAnimations.splice(idx, 1);
+                }
+            }
+            requestAnimationFrame(fadeOut);
+        }
+    }
+    requestAnimationFrame(frame);
+}
+
 
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
@@ -471,13 +922,16 @@ function connectWebSocket() {
         switch (msg.type) {
             case 'init':
                 protocolColors = msg.protocol_colors || FALLBACK_COLORS;
+                clustersData = msg.clusters || {};
                 addMachineMarkers(msg.machines || []);
                 addBGPVisualization(msg.bgp_peers || [], msg.my_asn, msg.my_asn_coords);
+                renderClusterButtons();
                 break;
 
             case 'flow':
                 animatePacket(msg.flow);
                 addFlowToList(msg.flow);
+                animateClusterPacket(msg.flow);
                 break;
 
             case 'stats':
@@ -546,6 +1000,25 @@ function setupControls() {
         const show = e.target.checked;
         machineMarkers.forEach(m => show ? m.addTo(map) : map.removeLayer(m));
     });
+
+    // Cluster overlay close button
+    const closeBtn = document.getElementById('cluster-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCluster);
+    }
+
+    // Cluster overlay toggle
+    const clusterToggle = document.getElementById('toggle-cluster-overlay');
+    if (clusterToggle) {
+        clusterToggle.addEventListener('change', function(e) {
+            const overlay = document.getElementById('cluster-overlay');
+            if (!e.target.checked) {
+                overlay.classList.add('hidden');
+            } else if (activeClusterName) {
+                overlay.classList.remove('hidden');
+            }
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------

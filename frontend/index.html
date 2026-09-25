@@ -16,6 +16,25 @@
         <!-- Map container -->
         <div id="map"></div>
 
+        <!-- Cluster overlay (virtual server box visualization) -->
+        <div id="cluster-overlay" class="hidden">
+            <div id="cluster-panel">
+                <div id="cluster-header">
+                    <span id="cluster-title">Cluster</span>
+                    <button id="cluster-close" title="Close">&times;</button>
+                </div>
+                <div id="cluster-diagram"></div>
+                <div id="cluster-legend">
+                    <div class="cluster-legend-item">
+                        <span class="cluster-legend-dot" style="background:#6c7ee1"></span> External packet (via router)
+                    </div>
+                    <div class="cluster-legend-item">
+                        <span class="cluster-legend-dot" style="background:#e67e22"></span> Internal VM-to-VM flow
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Side panel -->
         <div id="sidebar">
             <div id="sidebar-header">
@@ -25,6 +44,12 @@
                     <span class="status-dot"></span>
                     <span class="status-text">Connecting...</span>
                 </div>
+            </div>
+
+            <!-- Cluster selector -->
+            <div id="cluster-section" class="sidebar-section">
+                <h2>Virtual Server Clusters</h2>
+                <div id="cluster-buttons"></div>
             </div>
 
             <!-- Stats section -->
@@ -87,6 +112,10 @@
                 <label class="toggle-label">
                     <input type="checkbox" id="toggle-machines" checked />
                     Infrastructure Markers
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-cluster-overlay" checked />
+                    Cluster Panel (when opened)
                 </label>
             </div>
         </div>

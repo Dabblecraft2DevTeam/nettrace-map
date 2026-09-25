@@ -58,10 +58,11 @@ async def websocket_endpoint(ws: WebSocket):
     ws_clients.add(ws)
     logger.info("WebSocket client connected (%d total)", len(ws_clients))
 
-    # Send initial data: machines, BGP peers, recent flows
+    # Send initial data: machines, clusters, BGP peers, recent flows
     await ws.send_json({
         "type": "init",
         "machines": geo.all_machines(),
+        "clusters": config.CLUSTERS,
         "bgp_peers": geo.all_bgp_peers(),
         "my_asn": config.MY_ASN,
         "my_asn_coords": [config.MY_ASN_LAT, config.MY_ASN_LON],
@@ -169,6 +170,20 @@ def process_flow(src_ip: str, dst_ip: str, src_port: int, dst_port: int,
 
     src_geo, dst_geo = geo.geolocate_flow(src_ip, dst_ip)
 
+    # Determine cluster routing info for internal VM packet animation
+    # If src/dst IP matches an internal VM (172.1.0.x), attach vm info for
+    # the frontend cluster panel to animate packets to/from individual VMs.
+    src_vm = config.IP_MAP.get(src_ip)
+    dst_vm = config.IP_MAP.get(dst_ip)
+    src_cluster_vm = None
+    dst_cluster_vm = None
+    if src_vm and src_vm.cluster and src_vm.internal:
+        src_cluster_vm = {"name": src_vm.name, "ip": src_vm.ip,
+                          "role": src_vm.role, "cluster": src_vm.cluster}
+    if dst_vm and dst_vm.cluster and dst_vm.internal:
+        dst_cluster_vm = {"name": dst_vm.name, "ip": dst_vm.ip,
+                          "role": dst_vm.role, "cluster": dst_vm.cluster}
+
     flow = {
         "src_ip": src_ip,
         "dst_ip": dst_ip,
@@ -193,6 +208,16 @@ def process_flow(src_ip: str, dst_ip: str, src_port: int, dst_port: int,
             "country": dst_geo.country,
             "source": dst_geo.source,
         },
+        # Cluster routing — used by frontend to animate packets inside
+        # the virtual server box (router -> individual VM, or VM -> VM).
+        "src_vm": src_cluster_vm,
+        "dst_vm": dst_cluster_vm,
+        # Flag: this flow enters a cluster from the outside (external src,
+        # internal dst). Frontend draws router->VM arrow inside the box.
+        "enters_cluster": bool(dst_cluster_vm and not src_cluster_vm),
+        # Flag: this flow is entirely internal (both VMs in same cluster).
+        "internal_flow": bool(src_cluster_vm and dst_cluster_vm
+                              and src_cluster_vm["cluster"] == dst_cluster_vm["cluster"]),
     }
 
     # Update stats
@@ -402,14 +427,26 @@ class NetFlowProtocol(asyncio.DatagramProtocol):
 # ---------------------------------------------------------------------------
 
 DEMO_FLOWS = [
-    # (src_ip, dst_ip, dst_port, protocol_num, bytes_range)
-    ("10.0.0.1", "192.99.0.1", 443, 6, (500, 50000)),       # Home -> OVH BHS HTTPS
-    ("10.0.0.1", "192.99.0.3", 22, 6, (200, 5000)),         # Home -> DabbleBot SSH
-    ("192.99.0.1", "192.99.0.2", 443, 6, (1000, 100000)),   # BHS -> YYZ HTTPS
-    ("192.99.0.3", "172.1.0.104", 25565, 6, (200, 20000)),  # DabbleBot -> Factions MC
-    ("192.99.0.1", "172.1.0.105", 5432, 6, (500, 30000)),   # BHS -> DB VM (PostgreSQL)
-    ("10.0.0.1", "192.99.0.1", 53, 17, (100, 2000)),        # Home -> OVH DNS
-    ("192.99.0.1", "10.0.0.1", 443, 6, (500, 20000)),       # OVH -> Home HTTPS
+    # External -> OVH BHS edge (router handles inbound)
+    ("10.0.0.1",  "51.222.28.245", 443,   6, (500, 50000)),    # Home -> OVH BHS HTTPS
+    ("10.0.0.1",  "51.222.28.245", 22,    6, (200, 5000)),      # Home -> OVH BHS SSH
+    # External -> internal VMs (enters through router, routes to specific VM)
+    ("10.0.0.1",  "172.1.0.101", 25565,  6, (500, 40000)),     # Home -> Hub (Minecraft)
+    ("10.0.0.1",  "172.1.0.104", 25565,  6, (800, 60000)),     # Home -> Combat-1 (Factions)
+    ("10.0.0.1",  "172.1.0.103", 25566,  6, (400, 30000)),     # Home -> NorthSeas
+    ("10.0.0.1",  "172.1.0.102", 25566,  6, (300, 20000)),     # Home -> SeaTrials
+    # Internal VM -> VM (Factions -> DB)
+    ("172.1.0.104", "172.1.0.105", 3306, 6, (500, 30000)),     # Combat-1 -> DB (MySQL)
+    ("172.1.0.101", "172.1.0.105", 3306, 6, (300, 20000)),     # Hub -> DB (MySQL)
+    ("172.1.0.104", "172.1.0.105", 6379, 6, (200, 10000)),     # Combat-1 -> DB (Redis)
+    ("172.1.0.101", "172.1.0.100", 443,  6, (200, 8000)),      # Hub -> Proxy
+    ("172.1.0.100", "172.1.0.1",   53,   17,(100, 2000)),       # Proxy -> Router (DNS)
+    # OVH BHS -> YYZ (inter-datacenter)
+    ("51.222.28.245", "192.99.0.2", 443, 6, (1000, 100000)),   # BHS -> YYZ S3
+    # Outbound from OVH BHS
+    ("51.222.28.245", "10.0.0.81", 443,  6, (500, 20000)),     # BHS -> Home HTTPS
+    # DNS queries from internal VMs
+    ("172.1.0.104", "172.1.0.1",   53,   17,(60, 1500)),        # Combat-1 -> Router DNS
 ]
 
 import random
