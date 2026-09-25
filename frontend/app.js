@@ -60,11 +60,35 @@ function initMap() {
         maxZoom: 18,
     });
 
-    // Dark theme tile layer (CartoDB Dark Matter)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19,
+    // Dark theme tile layer (OpenStreetMap via CARTO dark style fallback)
+    // Primary: CARTO Dark Matter (free, no API key, based on OpenStreetMap data)
+    // Fallback: Stadia AlidadeSmoothDark (also free, OSM-based)
+    const tileLayers = {
+        dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            maxZoom: 19,
+            subdomains: 'abcd'
+        }),
+        osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19,
+            subdomains: 'abc'
+        }),
+        stadiaDark: L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 20,
+            subdomains: 'abc'
+        })
+    };
+
+    // Default to dark theme
+    tileLayers.dark.addTo(map);
+
+    // Layer control for switching map styles
+    L.control.layers({
+        "Dark (CARTO)": tileLayers.dark,
+        "OpenStreetMap": tileLayers.osm,
+        "Stadia Dark": tileLayers.stadiaDark
     }).addTo(map);
 
     // Load submarine cable overlay
