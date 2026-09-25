@@ -1,0 +1,138 @@
+{
+  "description": "OVH global datacenter locations and backbone fiber connections",
+  "source": "OVH public datacenter information",
+  "datacenters": [
+    {
+      "code": "BHS",
+      "name": "Beauharnois",
+      "country": "Canada",
+      "region": "North America",
+      "lat": 45.31,
+      "lon": -73.87,
+      "address": "50 Rue de l'Aluminerie, Beauharnois, QC",
+      "role": "XCP-NG Host / Minecraft servers"
+    },
+    {
+      "code": "YYZ",
+      "name": "Toronto / Cambridge",
+      "country": "Canada",
+      "region": "North America",
+      "lat": 43.65,
+      "lon": -79.38,
+      "role": "S3 Object Storage"
+    },
+    {
+      "code": "TOR1",
+      "name": "Toronto PoP",
+      "country": "Canada",
+      "region": "North America",
+      "lat": 43.65,
+      "lon": -79.38,
+      "role": "OVH Toronto Point of Presence"
+    },
+    {
+      "code": "GRA",
+      "name": "Gravelines",
+      "country": "France",
+      "region": "Europe",
+      "lat": 50.98,
+      "lon": 2.12
+    },
+    {
+      "code": "RBX",
+      "name": "Roubaix",
+      "country": "France",
+      "region": "Europe",
+      "lat": 50.69,
+      "lon": 3.17
+    },
+    {
+      "code": "SBG",
+      "name": "Strasbourg",
+      "country": "France",
+      "region": "Europe",
+      "lat": 48.58,
+      "lon": 7.75
+    },
+    {
+      "code": "VHI",
+      "name": "Vint Hill",
+      "country": "USA",
+      "region": "North America",
+      "lat": 38.78,
+      "lon": -77.70
+    },
+    {
+      "code": "HIL",
+      "name": "Hillsboro",
+      "country": "USA",
+      "region": "North America",
+      "lat": 45.52,
+      "lon": -122.99
+    },
+    {
+      "code": "SGP",
+      "name": "Singapore",
+      "country": "Singapore",
+      "region": "Asia-Pacific",
+      "lat": 1.35,
+      "lon": 103.82
+    },
+    {
+      "code": "SYD",
+      "name": "Sydney",
+      "country": "Australia",
+      "region": "Asia-Pacific",
+      "lat": -33.87,
+      "lon": 151.21
+    },
+    {
+      "code": "BOM",
+      "name": "Mumbai",
+      "country": "India",
+      "region": "Asia-Pacific",
+      "lat": 19.08,
+      "lon": 72.88
+    }
+  ],
+  "backbone_connections": [
+    { "from": "BHS", "to": "YYZ", "label": "BHS-YYZ private fiber" },
+    { "from": "BHS", "to": "VHI", "label": "BHS-VHI transatlantic" },
+    { "from": "BHS", "to": "GRA", "label": "BHS-GRA transatlantic" },
+    { "from": "BHS", "to": "HIL", "label": "BHS-HIL cross-continent" },
+    { "from": "YYZ", "to": "VHI", "label": "YYZ-VHI" },
+    { "from": "YYZ", "to": "GRA", "label": "YYZ-GRA transatlantic" },
+    { "from": "GRA", "to": "RBX", "label": "GRA-RBX intra-France" },
+    { "from": "RBX", "to": "SBG", "label": "RBX-SBG intra-France" },
+    { "from": "GRA", "to": "SBG", "label": "GRA-SBG intra-France" },
+    { "from": "GRA", "to": "VHI", "label": "GRA-VHI transatlantic" },
+    { "from": "GRA", "to": "SGP", "label": "GRA-SGP Europe-Asia" },
+    { "from": "SBG", "to": "SGP", "label": "SBG-SGP Europe-Asia" },
+    { "from": "SGP", "to": "SYD", "label": "SGP-SYD Asia-Pacific" },
+    { "from": "SGP", "to": "BOM", "label": "SGP-BOM Asia" },
+    { "from": "VHI", "to": "HIL", "label": "VHI-HIL US cross-continent" },
+    { "from": "HIL", "to": "SGP", "label": "HIL-SGP Pacific" },
+    { "from": "HIL", "to": "SYD", "label": "HIL-SYD Pacific" },
+    { "from": "BOM", "to": "SBG", "label": "BOM-SBG Asia-Europe" }
+  ],
+  "custom_lines": [
+    {
+      "from": "BHS",
+      "to": "Home",
+      "label": "NetBird / VPN",
+      "color": "#3498db",
+      "dashed": false,
+      "from_coords": [45.31, -73.87],
+      "to_coords": [45.40, -73.90]
+    },
+    {
+      "from": "BHS",
+      "to": "YYZ",
+      "label": "OVH private backbone (user traffic)",
+      "color": "#e67e22",
+      "dashed": true,
+      "from_coords": [45.31, -73.87],
+      "to_coords": [43.65, -79.38]
+    }
+  ]
+}

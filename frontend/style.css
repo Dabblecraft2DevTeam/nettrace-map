@@ -351,6 +351,47 @@ html, body {
     box-shadow: 0 0 10px rgba(155, 89, 182, 0.6);
 }
 
+/* OVH datacenter marker */
+.ovh-dc-marker {
+    background: transparent;
+}
+.ovh-dc-dot {
+    width: 10px;
+    height: 10px;
+    background: #e67e22;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(230, 126, 34, 0.7);
+}
+
+/* IXP markers */
+.ixp-marker {
+    background: transparent;
+}
+.ixp-dot {
+    width: 8px;
+    height: 8px;
+    background: #1abc9c;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(26, 188, 156, 0.6);
+}
+.ixp-dot-canadian {
+    background: #2ecc71;
+    border-color: #fff;
+    box-shadow: 0 0 6px rgba(46, 204, 113, 0.7);
+}
+
+/* Legend dash (for dashed lines) */
+.legend-dash {
+    width: 14px;
+    height: 4px;
+    border-radius: 2px;
+    display: inline-block;
+    box-shadow: 0 0 4px currentColor;
+    opacity: 0.6;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 6px;

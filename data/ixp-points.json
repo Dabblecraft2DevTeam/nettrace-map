@@ -1,0 +1,133 @@
+{
+  "description": "Internet Exchange Points (IXPs) — Canadian and major global peering points",
+  "source": "Public IXP directory information",
+  "exchange_points": [
+    {
+      "code": "QIX",
+      "name": "Montreal Internet Exchange",
+      "city": "Montreal",
+      "country": "Canada",
+      "region": "Canadian",
+      "lat": 45.50,
+      "lon": -73.57
+    },
+    {
+      "code": "TorIX",
+      "name": "Toronto Internet Exchange",
+      "city": "Toronto",
+      "country": "Canada",
+      "region": "Canadian",
+      "lat": 43.65,
+      "lon": -79.38,
+      "address": "151 Front Street West"
+    },
+    {
+      "code": "FRE-IX",
+      "name": "Fredericton Internet Exchange",
+      "city": "Fredericton",
+      "country": "Canada",
+      "region": "Canadian",
+      "lat": 45.96,
+      "lon": -66.64
+    },
+    {
+      "code": "YEG-IX",
+      "name": "Edmonton Internet Exchange",
+      "city": "Edmonton",
+      "country": "Canada",
+      "region": "Canadian",
+      "lat": 53.55,
+      "lon": -113.49
+    },
+    {
+      "code": "WPG-IX",
+      "name": "Winnipeg Internet Exchange",
+      "city": "Winnipeg",
+      "country": "Canada",
+      "region": "Canadian",
+      "lat": 49.88,
+      "lon": -97.16
+    },
+    {
+      "code": "BCIX",
+      "name": "BC Internet Exchange (Vancouver)",
+      "city": "Vancouver",
+      "country": "Canada",
+      "region": "Canadian",
+      "lat": 49.28,
+      "lon": -123.12
+    },
+    {
+      "code": "AMS-IX",
+      "name": "Amsterdam Internet Exchange",
+      "city": "Amsterdam",
+      "country": "Netherlands",
+      "region": "Global",
+      "lat": 52.37,
+      "lon": 4.89
+    },
+    {
+      "code": "LINX",
+      "name": "London Internet Exchange",
+      "city": "London",
+      "country": "United Kingdom",
+      "region": "Global",
+      "lat": 51.51,
+      "lon": -0.01
+    },
+    {
+      "code": "DE-CIX",
+      "name": "Deutsche Commercial Internet Exchange",
+      "city": "Frankfurt",
+      "country": "Germany",
+      "region": "Global",
+      "lat": 50.11,
+      "lon": 8.68
+    },
+    {
+      "code": "NYIIX",
+      "name": "New York International Internet Exchange",
+      "city": "New York",
+      "country": "USA",
+      "region": "Global",
+      "lat": 40.71,
+      "lon": -74.01
+    },
+    {
+      "code": "EQUINIX-ASH",
+      "name": "Equinix Ashburn",
+      "city": "Ashburn (Washington DC)",
+      "country": "USA",
+      "region": "Global",
+      "lat": 39.02,
+      "lon": -77.45
+    },
+    {
+      "code": "PAIX",
+      "name": "Palo Alto Internet Exchange",
+      "city": "Palo Alto",
+      "country": "USA",
+      "region": "Global",
+      "lat": 37.44,
+      "lon": -122.16
+    },
+    {
+      "code": "JPIX",
+      "name": "Japan Internet Exchange",
+      "city": "Tokyo",
+      "country": "Japan",
+      "region": "Global",
+      "lat": 35.69,
+      "lon": 139.69
+    },
+    {
+      "code": "HKIX",
+      "name": "Hong Kong Internet Exchange",
+      "city": "Hong Kong",
+      "country": "Hong Kong SAR",
+      "region": "Global",
+      "lat": 22.28,
+      "lon": 114.14
+    }
+  ]
+}

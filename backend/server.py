@@ -58,7 +58,7 @@ async def websocket_endpoint(ws: WebSocket):
     ws_clients.add(ws)
     logger.info("WebSocket client connected (%d total)", len(ws_clients))
 
-    # Send initial data: machines, clusters, BGP peers, recent flows
+    # Send initial data: machines, clusters, BGP peers, OVH backbone, IXPs, custom lines, recent flows
     await ws.send_json({
         "type": "init",
         "machines": geo.all_machines(),
@@ -67,6 +67,10 @@ async def websocket_endpoint(ws: WebSocket):
         "my_asn": config.MY_ASN,
         "my_asn_coords": [config.MY_ASN_LAT, config.MY_ASN_LON],
         "protocol_colors": config.PROTOCOL_COLORS,
+        "ovh_datacenters": config.OVH_DATACENTERS,
+        "ovh_backbone_connections": config.OVH_BACKBONE_CONNECTIONS,
+        "custom_lines": config.CUSTOM_LINES,
+        "ixp_points": config.IXP_POINTS,
     })
 
     # Send recent flows
@@ -156,6 +160,20 @@ async def get_cables():
 async def get_landing_points():
     """Serve landing points GeoJSON."""
     path = os.path.join(os.path.dirname(__file__), "..", "data", "landing_points.geojson")
+    return FileResponse(os.path.abspath(path), media_type="application/json")
+
+
+@app.get("/api/ovh-backbone")
+async def get_ovh_backbone():
+    """Serve OVH backbone data (datacenters + connections + custom lines)."""
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "ovh-backbone.json")
+    return FileResponse(os.path.abspath(path), media_type="application/json")
+
+
+@app.get("/api/ixp-points")
+async def get_ixp_points():
+    """Serve Internet Exchange Point locations."""
+    path = os.path.join(os.path.dirname(__file__), "..", "data", "ixp-points.json")
     return FileResponse(os.path.abspath(path), media_type="application/json")
 
 

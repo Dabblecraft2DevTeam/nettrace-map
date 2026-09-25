@@ -18,6 +18,19 @@ let activeAnimations = [];  // Currently animating packet dots
 let protocolColors = {};
 let maxSimultaneousAnimations = 50;
 
+// OVH backbone, IXP, and custom line state
+let ovhDatacenters = [];          // [{code, name, country, lat, lon, ...}]
+let ovhDcMap = {};                // code -> datacenter dict
+let ovhBackboneLines = [];        // L.polyline instances
+let ovhBackboneMarkers = [];      // L.marker instances
+let ovhBackboneLayerGroup = null; // L.layerGroup wrapping lines+markers
+
+let ixpMarkers = [];              // L.marker instances
+let ixpLayerGroup = null;
+
+let customLineObjects = [];       // L.polyline instances
+let customLineLayerGroup = null;
+
 // Cluster state
 let clustersData = {};         // cluster name -> cluster dict from backend
 let activeClusterName = null;  // currently displayed cluster
@@ -258,6 +271,162 @@ function addBGPVisualization(bgpPeers, myAsn, myAsnCoords) {
 
         bgpMarkers.push(peerMarker);
     });
+}
+
+// ---------------------------------------------------------------------------
+// OVH backbone network — datacenter markers + orange dashed fiber lines
+// ---------------------------------------------------------------------------
+
+/**
+ * Render OVH global datacenter locations and backbone connections.
+ * @param {Array} datacenters  — [{code,name,country,lat,lon,...}]
+ * @param {Array} connections  — [[fromCode, toCode], ...]
+ */
+function renderOVHBackbone(datacenters, connections) {
+    ovhDatacenters = datacenters || [];
+    ovhDcMap = {};
+    ovhDatacenters.forEach(dc => { ovhDcMap[dc.code] = dc; });
+
+    ovhBackboneLines = [];
+    ovhBackboneMarkers = [];
+    ovhBackboneLayerGroup = L.layerGroup();
+
+    // --- Backbone connection lines (orange dashed) ---
+    (connections || []).forEach(([fromCode, toCode]) => {
+        const from = ovhDcMap[fromCode];
+        const to = ovhDcMap[toCode];
+        if (!from || !to) return;
+
+        const arcPoints = generateArc([from.lat, from.lon], [to.lat, to.lon], 48);
+        const line = L.polyline(arcPoints, {
+            color: '#e67e22',
+            weight: 1.5,
+            opacity: 0.45,
+            dashArray: '8,6',
+        });
+
+        line.bindPopup(
+            `<div class="machine-popup">
+                <h3>OVH Backbone Fiber</h3>
+                <div class="popup-field"><span class="popup-label">Route:</span> ${fromCode} ↔ ${toCode}</div>
+                <div class="popup-field"><span class="popup-label">From:</span> ${from.name}, ${from.country}</div>
+                <div class="popup-field"><span class="popup-label">To:</span> ${to.name}, ${to.country}</div>
+            </div>`
+        );
+
+        ovhBackboneLines.push(line);
+        ovhBackboneLayerGroup.addLayer(line);
+    });
+
+    // --- Datacenter markers ---
+    ovhDatacenters.forEach(dc => {
+        const icon = L.divIcon({
+            className: 'ovh-dc-marker',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6],
+            html: `<div class="ovh-dc-dot"></div>`,
+        });
+
+        const marker = L.marker([dc.lat, dc.lon], { icon });
+        marker.bindPopup(
+            `<div class="machine-popup">
+                <h3>OVH ${dc.code}</h3>
+                <div class="popup-field"><span class="popup-label">Name:</span> ${dc.name}</div>
+                <div class="popup-field"><span class="popup-label">Country:</span> ${dc.country}</div>
+                <div class="popup-field"><span class="popup-label">Coords:</span> ${dc.lat.toFixed(2)}°, ${dc.lon.toFixed(2)}°</div>
+                ${dc.address ? `<div class="popup-field"><span class="popup-label">Address:</span> ${dc.address}</div>` : ''}
+                ${dc.role ? `<div class="popup-field"><span class="popup-label">Role:</span> ${dc.role}</div>` : ''}
+            </div>`
+        );
+
+        ovhBackboneMarkers.push(marker);
+        ovhBackboneLayerGroup.addLayer(marker);
+    });
+
+    ovhBackboneLayerGroup.addTo(map);
+    console.log(`OVH backbone: ${ovhBackboneLines.length} lines, ${ovhBackboneMarkers.length} datacenters`);
+}
+
+// ---------------------------------------------------------------------------
+// Internet Exchange Points — clickable markers
+// ---------------------------------------------------------------------------
+
+/**
+ * Render IXP markers on the map.
+ * @param {Array} ixps — [{code,name,city,country,region,lat,lon}]
+ */
+function renderIXPs(ixps) {
+    ixpMarkers = [];
+    ixpLayerGroup = L.layerGroup();
+
+    (ixps || []).forEach(ixp => {
+        const isCanadian = ixp.region === 'Canadian';
+        const icon = L.divIcon({
+            className: 'ixp-marker',
+            iconSize: [10, 10],
+            iconAnchor: [5, 5],
+            html: `<div class="ixp-dot${isCanadian ? ' ixp-dot-canadian' : ''}"></div>`,
+        });
+
+        const marker = L.marker([ixp.lat, ixp.lon], { icon });
+        marker.bindPopup(
+            `<div class="machine-popup">
+                <h3>${ixp.code}</h3>
+                <div class="popup-field"><span class="popup-label">Name:</span> ${ixp.name}</div>
+                <div class="popup-field"><span class="popup-label">City:</span> ${ixp.city}</div>
+                <div class="popup-field"><span class="popup-label">Country:</span> ${ixp.country}</div>
+                <div class="popup-field"><span class="popup-label">Type:</span> ${isCanadian ? 'Canadian IXP' : 'Global IXP'}</div>
+                ${ixp.address ? `<div class="popup-field"><span class="popup-label">Address:</span> ${ixp.address}</div>` : ''}
+            </div>`
+        );
+
+        ixpMarkers.push(marker);
+        ixpLayerGroup.addLayer(marker);
+    });
+
+    ixpLayerGroup.addTo(map);
+    console.log(`IXPs: ${ixpMarkers.length} markers loaded`);
+}
+
+// ---------------------------------------------------------------------------
+// Custom connection lines — BHS↔Home (blue), BHS↔YYZ (orange dashed), etc.
+// ---------------------------------------------------------------------------
+
+/**
+ * Render custom user-defined connection lines.
+ * @param {Array} lines — [{from,to,from_coords,to_coords,label,color,dashed}]
+ */
+function renderCustomLines(lines) {
+    customLineObjects = [];
+    customLineLayerGroup = L.layerGroup();
+
+    (lines || []).forEach(line => {
+        const from = line.from_coords;
+        const to = line.to_coords;
+        if (!from || !to) return;
+
+        const arcPoints = generateArc([from[0], from[1]], [to[0], to[1]], 48);
+        const poly = L.polyline(arcPoints, {
+            color: line.color || '#3498db',
+            weight: 2.5,
+            opacity: 0.6,
+            dashArray: line.dashed ? '8,6' : null,
+        });
+
+        poly.bindPopup(
+            `<div class="machine-popup">
+                <h3>Custom Connection</h3>
+                <div class="popup-field"><span class="popup-label">Route:</span> ${line.from} ↔ ${line.to}</div>
+                <div class="popup-field"><span class="popup-label">Label:</span> ${line.label || ''}</div>
+            </div>`
+        );
+
+        customLineObjects.push(poly);
+        customLineLayerGroup.addLayer(poly);
+    });
+
+    customLineLayerGroup.addTo(map);
+    console.log(`Custom lines: ${customLineObjects.length} rendered`);
 }
 
 // ---------------------------------------------------------------------------
@@ -950,6 +1119,10 @@ function connectWebSocket() {
                 addMachineMarkers(msg.machines || []);
                 addBGPVisualization(msg.bgp_peers || [], msg.my_asn, msg.my_asn_coords);
                 renderClusterButtons();
+                // New layers: OVH backbone, IXPs, custom lines
+                renderOVHBackbone(msg.ovh_datacenters || [], msg.ovh_backbone_connections || []);
+                renderIXPs(msg.ixp_points || []);
+                renderCustomLines(msg.custom_lines || []);
                 break;
 
             case 'flow':
@@ -1023,6 +1196,39 @@ function setupControls() {
     document.getElementById('toggle-machines').addEventListener('change', function(e) {
         const show = e.target.checked;
         machineMarkers.forEach(m => show ? m.addTo(map) : map.removeLayer(m));
+    });
+
+    // OVH backbone toggle
+    document.getElementById('toggle-ovh-backbone').addEventListener('change', function(e) {
+        if (ovhBackboneLayerGroup) {
+            if (e.target.checked) {
+                ovhBackboneLayerGroup.addTo(map);
+            } else {
+                map.removeLayer(ovhBackboneLayerGroup);
+            }
+        }
+    });
+
+    // IXP toggle
+    document.getElementById('toggle-ixp').addEventListener('change', function(e) {
+        if (ixpLayerGroup) {
+            if (e.target.checked) {
+                ixpLayerGroup.addTo(map);
+            } else {
+                map.removeLayer(ixpLayerGroup);
+            }
+        }
+    });
+
+    // Custom lines toggle
+    document.getElementById('toggle-custom-lines').addEventListener('change', function(e) {
+        if (customLineLayerGroup) {
+            if (e.target.checked) {
+                customLineLayerGroup.addTo(map);
+            } else {
+                map.removeLayer(customLineLayerGroup);
+            }
+        }
     });
 
     // Cluster overlay close button

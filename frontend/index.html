@@ -92,6 +92,11 @@
                 <div class="legend-item"><span class="legend-dot" style="background:#3498db"></span> Game Traffic</div>
                 <div class="legend-item"><span class="legend-dot" style="background:#f1c40f"></span> DNS</div>
                 <div class="legend-item"><span class="legend-dot" style="background:#ecf0f1"></span> Other</div>
+                <div class="legend-item"><span class="legend-dash" style="background:#e67e22"></span> OVH Backbone Fiber</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#3498db"></span> Custom: BHS↔Home (VPN)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#e67e22;opacity:0.6"></span> Custom: BHS↔YYZ (OVH)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#2ecc71;opacity:0.8"></span> IXP (Canadian)</div>
+                <div class="legend-item"><span class="legend-dot" style="background:#1abc9c;opacity:0.8"></span> IXP (Global)</div>
             </div>
 
             <!-- Controls -->
@@ -112,6 +117,18 @@
                 <label class="toggle-label">
                     <input type="checkbox" id="toggle-machines" checked />
                     Infrastructure Markers
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-ovh-backbone" checked />
+                    OVH Backbone Network
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-ixp" checked />
+                    Internet Exchange Points
+                </label>
+                <label class="toggle-label">
+                    <input type="checkbox" id="toggle-custom-lines" checked />
+                    Custom Connection Lines
                 </label>
                 <label class="toggle-label">
                     <input type="checkbox" id="toggle-cluster-overlay" checked />

@@ -277,3 +277,66 @@ def classify_protocol(port: int, protocol_num: int) -> str:
     if 25560 <= port <= 25600:
         return "MINECRAFT"
     return "OTHER"
+
+
+# ---------------------------------------------------------------------------
+# OVH global datacenter locations (backbone network)
+# ---------------------------------------------------------------------------
+
+OVH_DATACENTERS = [
+    {"code": "BHS",  "name": "Beauharnois",         "country": "Canada",     "lat": 45.31, "lon": -73.87},
+    {"code": "YYZ",  "name": "Toronto / Cambridge", "country": "Canada",     "lat": 43.65, "lon": -79.38},
+    {"code": "TOR1", "name": "Toronto PoP",         "country": "Canada",     "lat": 43.65, "lon": -79.38},
+    {"code": "GRA",  "name": "Gravelines",          "country": "France",     "lat": 50.98, "lon": 2.12},
+    {"code": "RBX",  "name": "Roubaix",             "country": "France",     "lat": 50.69, "lon": 3.17},
+    {"code": "SBG",  "name": "Strasbourg",          "country": "France",     "lat": 48.58, "lon": 7.75},
+    {"code": "VHI",  "name": "Vint Hill",           "country": "USA",        "lat": 38.78, "lon": -77.70},
+    {"code": "HIL",  "name": "Hillsboro",           "country": "USA",        "lat": 45.52, "lon": -122.99},
+    {"code": "SGP",  "name": "Singapore",           "country": "Singapore",  "lat": 1.35,  "lon": 103.82},
+    {"code": "SYD",  "name": "Sydney",              "country": "Australia",  "lat": -33.87, "lon": 151.21},
+    {"code": "BOM",  "name": "Mumbai",              "country": "India",      "lat": 19.08, "lon": 72.88},
+]
+
+OVH_BACKBONE_CONNECTIONS = [
+    ("BHS", "YYZ"), ("BHS", "VHI"), ("BHS", "GRA"), ("BHS", "HIL"),
+    ("YYZ", "VHI"), ("YYZ", "GRA"),
+    ("GRA", "RBX"), ("RBX", "SBG"), ("GRA", "SBG"),
+    ("GRA", "VHI"), ("GRA", "SGP"), ("SBG", "SGP"),
+    ("SGP", "SYD"), ("SGP", "BOM"),
+    ("VHI", "HIL"), ("HIL", "SGP"), ("HIL", "SYD"),
+    ("BOM", "SBG"),
+]
+
+# Custom connection lines (user-specific)
+CUSTOM_LINES = [
+    {
+        "from": "BHS", "to": "Home",
+        "from_coords": [45.31, -73.87], "to_coords": [45.40, -73.90],
+        "label": "NetBird / VPN",
+        "color": "#3498db", "dashed": False,
+    },
+    {
+        "from": "BHS", "to": "YYZ",
+        "from_coords": [45.31, -73.87], "to_coords": [43.65, -79.38],
+        "label": "OVH private backbone (user traffic)",
+        "color": "#e67e22", "dashed": True,
+    },
+]
+
+# Internet Exchange Points (Canadian + major global)
+IXP_POINTS = [
+    {"code": "QIX",      "name": "Montreal Internet Exchange",   "city": "Montreal",         "country": "Canada",          "region": "Canadian", "lat": 45.50, "lon": -73.57},
+    {"code": "TorIX",    "name": "Toronto Internet Exchange",    "city": "Toronto",          "country": "Canada",          "region": "Canadian", "lat": 43.65, "lon": -79.38},
+    {"code": "FRE-IX",   "name": "Fredericton Internet Exchange","city": "Fredericton",      "country": "Canada",          "region": "Canadian", "lat": 45.96, "lon": -66.64},
+    {"code": "YEG-IX",   "name": "Edmonton Internet Exchange",   "city": "Edmonton",         "country": "Canada",          "region": "Canadian", "lat": 53.55, "lon": -113.49},
+    {"code": "WPG-IX",   "name": "Winnipeg Internet Exchange",   "city": "Winnipeg",         "country": "Canada",          "region": "Canadian", "lat": 49.88, "lon": -97.16},
+    {"code": "BCIX",     "name": "BC Internet Exchange",         "city": "Vancouver",        "country": "Canada",          "region": "Canadian", "lat": 49.28, "lon": -123.12},
+    {"code": "AMS-IX",   "name": "Amsterdam Internet Exchange",  "city": "Amsterdam",        "country": "Netherlands",     "region": "Global",   "lat": 52.37, "lon": 4.89},
+    {"code": "LINX",     "name": "London Internet Exchange",     "city": "London",           "country": "United Kingdom",  "region": "Global",   "lat": 51.51, "lon": -0.01},
+    {"code": "DE-CIX",   "name": "Deutsche Commercial Internet Exchange", "city": "Frankfurt", "country": "Germany",       "region": "Global",   "lat": 50.11, "lon": 8.68},
+    {"code": "NYIIX",    "name": "New York International Internet Exchange", "city": "New York", "country": "USA",         "region": "Global",   "lat": 40.71, "lon": -74.01},
+    {"code": "EQUINIX-ASH", "name": "Equinix Ashburn",           "city": "Ashburn",          "country": "USA",             "region": "Global",   "lat": 39.02, "lon": -77.45},
+    {"code": "PAIX",     "name": "Palo Alto Internet Exchange",  "city": "Palo Alto",        "country": "USA",             "region": "Global",   "lat": 37.44, "lon": -122.16},
+    {"code": "JPIX",     "name": "Japan Internet Exchange",      "city": "Tokyo",            "country": "Japan",           "region": "Global",   "lat": 35.69, "lon": 139.69},
+    {"code": "HKIX",     "name": "Hong Kong Internet Exchange",  "city": "Hong Kong",        "country": "Hong Kong SAR",   "region": "Global",   "lat": 22.28, "lon": 114.14},
+]
