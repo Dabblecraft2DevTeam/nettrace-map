@@ -12,7 +12,7 @@ import time
 from collections import deque
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -47,6 +47,16 @@ flow_stats = {
     "recent_flows": deque(maxlen=200),
 }
 
+# ---------------------------------------------------------------------------
+# Agent health data — stores latest report per agent instance
+# ---------------------------------------------------------------------------
+
+# agent_reports: instance_name -> latest metrics dict
+agent_reports: dict[str, dict] = {}
+# Track when we last broadcast agent health to avoid flooding
+_last_agent_broadcast = 0.0
+_AGENT_BROADCAST_INTERVAL = 2.0  # min seconds between broadcasts
+
 
 # ---------------------------------------------------------------------------
 # WebSocket endpoint
@@ -58,7 +68,7 @@ async def websocket_endpoint(ws: WebSocket):
     ws_clients.add(ws)
     logger.info("WebSocket client connected (%d total)", len(ws_clients))
 
-    # Send initial data: machines, clusters, BGP peers, OVH backbone, IXPs, custom lines, recent flows
+    # Send initial data: machines, clusters, BGP peers, OVH backbone, IXPs, custom lines, agent health, recent flows
     await ws.send_json({
         "type": "init",
         "machines": geo.all_machines(),
@@ -71,6 +81,7 @@ async def websocket_endpoint(ws: WebSocket):
         "ovh_backbone_connections": config.OVH_BACKBONE_CONNECTIONS,
         "custom_lines": config.CUSTOM_LINES,
         "ixp_points": config.IXP_POINTS,
+        "agent_health": list(agent_reports.values()) if agent_reports else [],
     })
 
     # Send recent flows
@@ -178,13 +189,74 @@ async def get_ixp_points():
 
 
 # ---------------------------------------------------------------------------
+# Agent health endpoint — receive monitoring reports from VM agents
+# ---------------------------------------------------------------------------
+
+@app.post("/api/agent-report")
+async def agent_report(request: Request):
+    """Receive a monitoring report from a NetTrace agent and store it."""
+    try:
+        data = await request.json()
+    except Exception as e:
+        logger.warning("Agent report: invalid JSON: %s", e)
+        return JSONResponse({"status": "error", "error": "invalid JSON"}, status_code=400)
+
+    instance = data.get("instance_name") or data.get("hostname") or "unknown"
+    cluster = data.get("cluster") or "unknown"
+
+    # Store the latest report keyed by instance name
+    data["received_at"] = time.time()
+    agent_reports[instance] = data
+
+    logger.debug("Agent report from %s (cluster=%s): CPU=%s%% RAM=%s%% disk=%s%%",
+                 instance, cluster,
+                 data.get("cpu", {}).get("usage_percent", "?"),
+                 data.get("memory", {}).get("percent", "?"),
+                 data.get("disk", {}).get("percent", "?"))
+
+    # Broadcast updated agent health to WebSocket clients (rate-limited)
+    global _last_agent_broadcast
+    now = time.time()
+    if now - _last_agent_broadcast >= _AGENT_BROADCAST_INTERVAL:
+        _last_agent_broadcast = now
+        asyncio.ensure_future(broadcast_agent_health())
+
+    return JSONResponse({"status": "ok", "instance": instance})
+
+
+@app.get("/api/agents")
+async def get_agent_reports():
+    """Return all latest agent reports (for debugging / REST queries)."""
+    return JSONResponse({
+        "agents": list(agent_reports.values()),
+        "count": len(agent_reports),
+    })
+
+
+async def broadcast_agent_health():
+    """Send all agent health data to connected WebSocket clients."""
+    dead = set()
+    msg = {
+        "type": "agent_health",
+        "agents": list(agent_reports.values()),
+        "timestamp": time.time(),
+    }
+    for ws in ws_clients:
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            dead.add(ws)
+    ws_clients.difference_update(dead)
+
+
+# ---------------------------------------------------------------------------
 # Flow processing
 # ---------------------------------------------------------------------------
 
 def process_flow(src_ip: str, dst_ip: str, src_port: int, dst_port: int,
                  protocol: int, bytes_count: int, packets: int = 0):
     """Process a single NetFlow record: geolocate, classify, broadcast."""
-    proto_label = config.classify_protocol(dst_port, protocol)
+    proto_label = config.classify_protocol(dst_port, src_port, protocol)
 
     src_geo, dst_geo = geo.geolocate_flow(src_ip, dst_ip)
 
@@ -249,6 +321,8 @@ def process_flow(src_ip: str, dst_ip: str, src_port: int, dst_port: int,
 
     # Broadcast asynchronously
     asyncio.ensure_future(broadcast_flow(flow))
+    # Also broadcast stats update (works with real NetFlow, not just demo mode)
+    asyncio.ensure_future(broadcast_stats())
 
 
 # ---------------------------------------------------------------------------

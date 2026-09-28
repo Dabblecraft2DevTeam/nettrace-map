@@ -39,6 +39,9 @@ let clusterSvgRoot = null;     // current SVG element for the active cluster
 let clusterPacketAnimations = []; // active in-cluster packet animations
 let maxClusterPackets = 30;
 
+// Agent health state — instance_name -> latest metrics dict
+let agentHealthData = {};
+
 // ---------------------------------------------------------------------------
 // Protocol colors (fallback if not received from server)
 // ---------------------------------------------------------------------------
@@ -734,7 +737,7 @@ function layoutClusterVMs(cluster) {
     if (!routerVm && vms.length > 0) routerVm = vms[0];
 
     const nodeW = 110;
-    const nodeH = 54;
+    const nodeH = 70;
     const gapX = 24;
     const gapY = 18;
     const routerX = 30;
@@ -842,6 +845,7 @@ function renderClusterDiagram(name, cluster) {
         const g = document.createElementNS(ns, 'g');
         g.setAttribute('class', pos.isRouter ? 'vm-node vm-node-router' : 'vm-node');
         g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`);
+        g.setAttribute('data-vm-ip', ip);
 
         // Rect
         const rect = document.createElementNS(ns, 'rect');
@@ -904,6 +908,11 @@ function renderClusterDiagram(name, cluster) {
     diagramDiv.innerHTML = '';
     diagramDiv.appendChild(svg);
     clusterSvgRoot = svg;
+
+    // Apply agent health indicators if we already have data
+    if (Object.keys(agentHealthData).length > 0) {
+        updateClusterVMHealth(name);
+    }
 }
 
 /**
@@ -1084,6 +1093,278 @@ function animateClusterPacket(flow) {
 }
 
 
+// ---------------------------------------------------------------------------
+// Agent health — VM monitoring data display
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle incoming agent health updates from WebSocket.
+ * Stores latest data per instance and updates the cluster diagram if open.
+ */
+function handleAgentHealth(agents) {
+    agents.forEach(agent => {
+        const key = agent.instance_name || agent.hostname;
+        if (key) agentHealthData[key] = agent;
+    });
+
+    // If a cluster is currently open, update the VM health indicators
+    if (activeClusterName && clusterSvgRoot) {
+        updateClusterVMHealth(activeClusterName);
+    }
+}
+
+/**
+ * Determine health status (green/yellow/red) from agent metrics.
+ * @param {object} agent - agent report dict
+ * @returns {string} 'healthy', 'warning', 'critical', or 'unknown'
+ */
+function getVMHealthStatus(agent) {
+    if (!agent) return 'unknown';
+
+    const cpu = agent.cpu?.usage_percent ?? 0;
+    const mem = agent.memory?.percent ?? 0;
+    const disk = agent.disk?.percent ?? 0;
+    const load = agent.load_average?.[0] ?? 0;
+    const cores = agent.cpu?.cores || 1;
+
+    // Critical: any metric above 90% or load > 2x cores
+    if (cpu > 90 || mem > 90 || disk > 95 || load > cores * 2) {
+        return 'critical';
+    }
+    // Warning: any metric above 75%
+    if (cpu > 75 || mem > 75 || disk > 80 || load > cores) {
+        return 'warning';
+    }
+    return 'healthy';
+}
+
+/**
+ * Get health color for a status.
+ */
+function healthColor(status) {
+    switch (status) {
+        case 'healthy':  return '#2ecc71';
+        case 'warning':  return '#f1c40f';
+        case 'critical': return '#e74c3c';
+        default:         return '#555';
+    }
+}
+
+/**
+ * Find agent data for a VM by matching IP or hostname.
+ * @param {object} vm - VM dict from cluster config {name, ip, role, ram}
+ * @returns {object|null} agent report or null
+ */
+function findAgentForVM(vm) {
+    // Try matching by IP address in agent's ip_addresses
+    for (const key in agentHealthData) {
+        const agent = agentHealthData[key];
+        const ips = agent.ip_addresses || {};
+        if (Object.values(ips).includes(vm.ip)) return agent;
+        // Also try matching by hostname
+        if (agent.hostname && agent.hostname === vm.ip) return agent;
+        // Try matching instance_name to VM name (normalized)
+        const normName = vm.name.replace(/^GC02-/, '').toLowerCase();
+        const normInst = (agent.instance_name || '').toLowerCase();
+        if (normInst === normName || normInst === vm.name.toLowerCase()) return agent;
+    }
+    return null;
+}
+
+/**
+ * Service icon SVG path for each service type.
+ */
+const SERVICE_ICONS = {
+    ssh:       { label: 'SSH',       icon: '🔐', port: 22 },
+    mysql:     { label: 'MySQL',     icon: '🗄',  port: 3306 },
+    redis:     { label: 'Redis',     icon: '⚡',  port: 6379 },
+    minecraft: { label: 'MC',        icon: '⛏',   port: 25565 },
+};
+
+/**
+ * Format uptime seconds into human-readable string.
+ */
+function formatUptime(seconds) {
+    if (!seconds || seconds < 0) return 'N/A';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
+/**
+ * Format bytes to human readable.
+ */
+function formatRate(bytesPerSec) {
+    if (bytesPerSec < 1) return '0 B/s';
+    if (bytesPerSec < 1024) return bytesPerSec.toFixed(0) + ' B/s';
+    if (bytesPerSec < 1048576) return (bytesPerSec / 1024).toFixed(1) + ' KB/s';
+    return (bytesPerSec / 1048576).toFixed(1) + ' MB/s';
+}
+
+/**
+ * Update VM health indicators on the active cluster diagram.
+ * Called when agent health data arrives and a cluster is open.
+ */
+function updateClusterVMHealth(clusterName) {
+    if (!clusterSvgRoot || !activeClusterName) return;
+
+    const positions = clusterVmPositions[clusterName];
+    if (!positions) return;
+
+    const cluster = clustersData[clusterName];
+    if (!cluster || !cluster.vms) return;
+
+    const ns = 'http://www.w3.org/2000/svg';
+
+    cluster.vms.forEach(vm => {
+        const pos = positions[vm.ip];
+        if (!pos) return;
+
+        const agent = findAgentForVM(vm);
+        const status = getVMHealthStatus(agent);
+        const color = healthColor(status);
+
+        // Find the VM node group for this IP
+        const nodeGroup = clusterSvgRoot.querySelector(`[data-vm-ip="${vm.ip}"]`);
+        if (!nodeGroup) return;
+
+        // Update rect stroke color based on health
+        const rect = nodeGroup.querySelector('.vm-node-rect');
+        if (rect) {
+            if (status !== 'unknown') {
+                rect.style.stroke = color;
+                rect.style.strokeWidth = '2';
+                // Subtle fill tint
+                const fillOpacity = status === 'healthy' ? 0.05 : (status === 'warning' ? 0.08 : 0.12);
+                rect.style.fill = color;
+                rect.style.fillOpacity = fillOpacity;
+            } else {
+                // Reset to default if no agent data
+                rect.style.stroke = '';
+                rect.style.strokeWidth = '';
+                rect.style.fill = '';
+                rect.style.fillOpacity = '';
+            }
+        }
+
+        // Update or create health indicator dot (top-right corner)
+        let healthDot = nodeGroup.querySelector('.vm-health-dot');
+        if (!healthDot && status !== 'unknown') {
+            healthDot = document.createElementNS(ns, 'circle');
+            healthDot.setAttribute('class', 'vm-health-dot');
+            healthDot.setAttribute('cx', pos.w - 8);
+            healthDot.setAttribute('cy', 8);
+            healthDot.setAttribute('r', 4);
+            nodeGroup.appendChild(healthDot);
+        }
+        if (healthDot) {
+            if (status === 'unknown') {
+                healthDot.remove();
+            } else {
+                healthDot.setAttribute('fill', color);
+                healthDot.setAttribute('stroke', '#fff');
+                healthDot.setAttribute('stroke-width', '0.5');
+                healthDot.style.filter = `drop-shadow(0 0 3px ${color})`;
+            }
+        }
+
+        // Update or remove metrics text (below IP)
+        let metricsText = nodeGroup.querySelector('.vm-metrics-text');
+        let servicesGroup = nodeGroup.querySelector('.vm-services-group');
+
+        if (agent) {
+            // Metrics text
+            if (!metricsText) {
+                metricsText = document.createElementNS(ns, 'text');
+                metricsText.setAttribute('class', 'vm-metrics-text');
+                metricsText.setAttribute('x', pos.w / 2);
+                nodeGroup.appendChild(metricsText);
+            }
+            const cpuPct = agent.cpu?.usage_percent ?? '?';
+            const memPct = agent.memory?.percent ?? '?';
+            const diskPct = agent.disk?.percent ?? '?';
+            metricsText.setAttribute('y', pos.h - 6);
+            metricsText.textContent = `CPU ${cpuPct}% · RAM ${memPct}% · Disk ${diskPct}%`;
+
+            // Service icons
+            if (!servicesGroup) {
+                servicesGroup = document.createElementNS(ns, 'g');
+                servicesGroup.setAttribute('class', 'vm-services-group');
+                nodeGroup.appendChild(servicesGroup);
+            }
+            servicesGroup.innerHTML = '';
+
+            const services = agent.services || {};
+            const activeServices = Object.entries(services).filter(([k, v]) => v === true);
+            const iconSize = 10;
+            const iconGap = 3;
+            const totalW = activeServices.length * (iconSize + iconGap) - iconGap;
+            let iconX = (pos.w - totalW) / 2;
+            const iconY = pos.h - 20;
+
+            activeServices.forEach(([svc, active]) => {
+                const svcInfo = SERVICE_ICONS[svc];
+                if (!svcInfo) return;
+                const iconRect = document.createElementNS(ns, 'rect');
+                iconRect.setAttribute('x', iconX);
+                iconRect.setAttribute('y', iconY);
+                iconRect.setAttribute('width', iconSize);
+                iconRect.setAttribute('height', iconSize);
+                iconRect.setAttribute('rx', 2);
+                iconRect.setAttribute('class', 'vm-service-icon');
+                iconRect.setAttribute('fill', '#2a2a4a');
+                iconRect.setAttribute('stroke', '#555');
+                iconRect.setAttribute('stroke-width', '0.5');
+                servicesGroup.appendChild(iconRect);
+
+                const iconLabel = document.createElementNS(ns, 'text');
+                iconLabel.setAttribute('x', iconX + iconSize / 2);
+                iconLabel.setAttribute('y', iconY + iconSize - 2);
+                iconLabel.setAttribute('class', 'vm-service-icon-label');
+                iconLabel.textContent = svcInfo.label.substring(0, 2);
+                servicesGroup.appendChild(iconLabel);
+
+                iconX += iconSize + iconGap;
+            });
+
+            // Update tooltip
+            const titleElem = nodeGroup.querySelector('title');
+            if (titleElem) {
+                const upStr = formatUptime(agent.uptime_seconds);
+                const netIn = formatRate(agent.network?.bytes_in_rate || 0);
+                const netOut = formatRate(agent.network?.bytes_out_rate || 0);
+                const loadStr = agent.load_average ? agent.load_average.join(', ') : 'N/A';
+                const tempStr = agent.temperature != null ? agent.temperature.toFixed(1) + '°C' : 'N/A';
+                const svcList = Object.entries(services)
+                    .filter(([k, v]) => v)
+                    .map(([k]) => SERVICE_ICONS[k]?.label || k)
+                    .join(', ') || 'none';
+                titleElem.textContent =
+                    `${vm.name}\n${vm.role || ''}\n${vm.ip}` +
+                    `\n\nCPU: ${cpuPct}% (${agent.cpu?.cores || '?'} cores)` +
+                    `\nRAM: ${memPct}% (${formatBytes(agent.memory?.used || 0)} / ${formatBytes(agent.memory?.total || 0)})` +
+                    `\nDisk: ${diskPct}% (${formatBytes(agent.disk?.used || 0)} / ${formatBytes(agent.disk?.total || 0)})` +
+                    `\nLoad: ${loadStr}` +
+                    `\nUptime: ${upStr}` +
+                    `\nNetwork: ↓${netIn} ↑${netOut}` +
+                    `\nTemp: ${tempStr}` +
+                    `\nServices: ${svcList}`;
+            }
+        } else {
+            // No agent data — remove metrics and service icons
+            if (metricsText) metricsText.remove();
+            if (servicesGroup) servicesGroup.remove();
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Format helpers
+// ---------------------------------------------------------------------------
+
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -1123,6 +1404,13 @@ function connectWebSocket() {
                 renderOVHBackbone(msg.ovh_datacenters || [], msg.ovh_backbone_connections || []);
                 renderIXPs(msg.ixp_points || []);
                 renderCustomLines(msg.custom_lines || []);
+                // Agent health from init
+                if (msg.agent_health) {
+                    msg.agent_health.forEach(a => {
+                        const key = a.instance_name || a.hostname;
+                        if (key) agentHealthData[key] = a;
+                    });
+                }
                 break;
 
             case 'flow':
@@ -1133,6 +1421,10 @@ function connectWebSocket() {
 
             case 'stats':
                 updateStats(msg.stats);
+                break;
+
+            case 'agent_health':
+                handleAgentHealth(msg.agents || []);
                 break;
 
             case 'pong':

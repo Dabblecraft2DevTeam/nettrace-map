@@ -162,6 +162,17 @@ MACHINES: list[Machine] = [
         internal=True,
         cluster="Home",
     ),
+    Machine(
+        name="TrueNAS Server",
+        hostname="truenas",
+        ip="10.0.0.40",
+        lat=45.40,
+        lon=-73.90,
+        role="NAS / Storage",
+        location="Montreal area, Quebec, Canada",
+        internal=True,
+        cluster="Home",
+    ),
 ]
 
 # Quick lookup: IP -> Machine
@@ -206,6 +217,7 @@ CLUSTERS = {
         "lon": -73.90,
         "vms": [
             {"name": "Hermes Machine", "ip": "10.0.0.81", "role": "AI Agent / Desktop", "ram": "N/A"},
+            {"name": "TrueNAS Server", "ip": "10.0.0.40", "role": "NAS / Storage", "ram": "N/A"},
         ],
     },
 }
@@ -269,13 +281,18 @@ PORT_PROTOCOLS: dict[int, str] = {
 }
 
 
-def classify_protocol(port: int, protocol_num: int) -> str:
-    """Classify a flow by port number."""
-    if port in PORT_PROTOCOLS:
-        return PORT_PROTOCOLS[port]
-    # Common ranges
-    if 25560 <= port <= 25600:
-        return "MINECRAFT"
+def classify_protocol(dst_port: int, src_port: int = 0, protocol_num: int = 0) -> str:
+    """Classify a flow by port number. Checks both destination and source ports."""
+    # Check destination port first
+    if dst_port in PORT_PROTOCOLS:
+        return PORT_PROTOCOLS[dst_port]
+    # Check source port (catches return traffic from servers)
+    if src_port in PORT_PROTOCOLS:
+        return PORT_PROTOCOLS[src_port]
+    # Common ranges — check both ports
+    for port in (dst_port, src_port):
+        if 25560 <= port <= 25600:
+            return "MINECRAFT"
     return "OTHER"
 
 
