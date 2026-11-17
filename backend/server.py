@@ -16,7 +16,17 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-import config
+try:
+    import importlib.util as _ilu, os as _os
+    _local = _os.path.join(_os.path.dirname(__file__), "config.local.py")
+    if _os.path.exists(_local):
+        _spec = _ilu.spec_from_file_location("config_local", _local)
+        config = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(config)
+    else:
+        import config
+except Exception:
+    import config
 import geo
 
 # ---------------------------------------------------------------------------

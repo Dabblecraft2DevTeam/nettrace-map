@@ -1,7 +1,7 @@
 """
 NetTrace Map — Configuration
 Pre-configured infrastructure endpoints for geolocation.
-XCP-NG VM inventory fetched from XO API at http://172.1.0.5
+XCP-NG VM inventory fetched from XO API at http://10.0.0.10
 """
 
 from dataclasses import dataclass, field
@@ -30,99 +30,99 @@ class Machine:
 MACHINES: list[Machine] = [
     # === OVH BHS Datacenter — XCP-NG Host (all VMs) ===
     Machine(
-        name="GC02-Router",
+        name="VM-Router",
         hostname="router",
-        ip="172.1.0.1",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="OPNsense Router / Edge Firewall / BGP",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="GC02-Proxy",
+        name="VM-Proxy",
         hostname="proxy",
-        ip="172.1.0.100",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="Reverse Proxy",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="XOCE",
+        name="VM-Orchestra",
         hostname="xoce",
-        ip="172.1.0.5",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="XCP-NG Orchestra (VM Management)",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="GC02-Hub",
+        name="VM-Hub",
         hostname="hub",
-        ip="172.1.0.101",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="Minecraft Hub Server (6GB)",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="GC02-Combat-1",
+        name="VM-Combat-1",
         hostname="combat1",
-        ip="172.1.0.104",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="Minecraft Combat VM (15GB) — Factions",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="GC02-NorthSeas",
+        name="VM-NorthSeas",
         hostname="northseas",
-        ip="172.1.0.103",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="Minecraft NorthSeas (7GB)",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="GC02-SeaTrials",
+        name="VM-SeaTrials",
         hostname="seatrials",
-        ip="172.1.0.102",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="Minecraft SeaTrials (5GB)",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.10",
         cluster="OVH BHS",
     ),
     Machine(
-        name="GC02-DB",
+        name="VM-DB",
         hostname="db-vm",
-        ip="172.1.0.105",
+        ip="10.0.0.10",
         lat=45.31,
         lon=-73.87,
         role="Database VM — MariaDB/Redis",
         location="OVH BHS (internal)",
         internal=True,
-        external_ip="51.222.28.245",
+        external_ip="198.51.100.20",
         cluster="OVH BHS",
     ),
 
@@ -130,7 +130,7 @@ MACHINES: list[Machine] = [
     Machine(
         name="OVH YYZ S3 Storage",
         hostname="ovh-yyz",
-        ip="192.99.0.2",          # Placeholder — replace with YYZ public IP
+        ip="198.51.100.30",          # Placeholder — replace with YYZ public IP
         lat=43.65,
         lon=-79.38,
         role="S3 Object Storage",
@@ -138,11 +138,11 @@ MACHINES: list[Machine] = [
         cluster="OVH YYZ",
     ),
 
-    # === DabbleBot VPS (separate OVH BHS instance) ===
+    # === Example VPS (separate OVH BHS instance) ===
     Machine(
-        name="DabbleBot VPS",
-        hostname="dabblebot",
-        ip="51.222.28.245",
+        name="Example VPS",
+        hostname="example-vps",
+        ip="198.51.100.20",
         lat=45.31,
         lon=-73.87,
         role="DabbleBot Discord Bot",
@@ -154,10 +154,10 @@ MACHINES: list[Machine] = [
     Machine(
         name="Home Network",
         hostname="home",
-        ip="10.0.0.81",
+        ip="192.168.1.10",
         lat=45.40,
         lon=-73.90,
-        role="Hermes Machine / Omada Network / TBE550E WiFi7",
+        role="Home Server / Omada Network / TBE550E WiFi7",
         location="Montreal area, Quebec, Canada",
         internal=True,
         cluster="Home",
@@ -165,7 +165,7 @@ MACHINES: list[Machine] = [
     Machine(
         name="TrueNAS Server",
         hostname="truenas",
-        ip="10.0.0.40",
+        ip="192.168.1.20",
         lat=45.40,
         lon=-73.90,
         role="NAS / Storage",
@@ -188,17 +188,17 @@ CLUSTERS = {
         "location": "Beauharnois, Quebec, Canada",
         "lat": 45.31,
         "lon": -73.87,
-        "edge_ip": "51.222.28.245",  # Router/OPNsense public IP
-        "edge_name": "GC02-Router (OPNsense)",
+        "edge_ip": "198.51.100.10",  # Router/OPNsense public IP (MC Velocity edge)
+        "edge_name": "VM-Router (OPNsense)",
         "vms": [
-            {"name": "GC02-Router", "ip": "172.1.0.1", "role": "OPNsense Edge", "ram": "1GB"},
-            {"name": "GC02-Proxy", "ip": "172.1.0.100", "role": "Reverse Proxy", "ram": "1GB"},
-            {"name": "XOCE", "ip": "172.1.0.5", "role": "XO Management", "ram": "4GB"},
-            {"name": "GC02-Hub", "ip": "172.1.0.101", "role": "MC Hub", "ram": "6GB"},
-            {"name": "GC02-Combat-1", "ip": "172.1.0.104", "role": "MC Factions", "ram": "15GB"},
-            {"name": "GC02-NorthSeas", "ip": "172.1.0.103", "role": "MC NorthSeas", "ram": "7GB"},
-            {"name": "GC02-SeaTrials", "ip": "172.1.0.102", "role": "MC SeaTrials", "ram": "5GB"},
-            {"name": "GC02-DB", "ip": "172.1.0.105", "role": "MariaDB/Redis", "ram": "1GB"},
+            {"name": "VM-Router", "ip": "10.0.0.10", "role": "OPNsense Edge", "ram": "1GB"},
+            {"name": "VM-Proxy", "ip": "10.0.0.10", "role": "Reverse Proxy", "ram": "1GB"},
+            {"name": "VM-Orchestra", "ip": "10.0.0.10", "role": "XO Management", "ram": "4GB"},
+            {"name": "VM-Hub", "ip": "10.0.0.10", "role": "MC Hub", "ram": "6GB"},
+            {"name": "VM-Combat-1", "ip": "10.0.0.10", "role": "MC Factions", "ram": "15GB"},
+            {"name": "VM-NorthSeas", "ip": "10.0.0.10", "role": "MC NorthSeas", "ram": "7GB"},
+            {"name": "VM-SeaTrials", "ip": "10.0.0.10", "role": "MC SeaTrials", "ram": "5GB"},
+            {"name": "VM-DB", "ip": "10.0.0.10", "role": "MariaDB/Redis", "ram": "1GB"},
         ],
     },
     "OVH YYZ": {
@@ -207,7 +207,7 @@ CLUSTERS = {
         "lat": 43.65,
         "lon": -79.38,
         "vms": [
-            {"name": "S3 Storage", "ip": "192.99.0.2", "role": "Object Storage", "ram": "N/A"},
+            {"name": "S3 Storage", "ip": "198.51.100.30", "role": "Object Storage", "ram": "N/A"},
         ],
     },
     "Home": {
@@ -216,8 +216,8 @@ CLUSTERS = {
         "lat": 45.40,
         "lon": -73.90,
         "vms": [
-            {"name": "Hermes Machine", "ip": "10.0.0.81", "role": "AI Agent / Desktop", "ram": "N/A"},
-            {"name": "TrueNAS Server", "ip": "10.0.0.40", "role": "NAS / Storage", "ram": "N/A"},
+            {"name": "Home Server", "ip": "192.168.1.10", "role": "AI Agent / Desktop", "ram": "N/A"},
+            {"name": "TrueNAS Server", "ip": "192.168.1.20", "role": "NAS / Storage", "ram": "N/A"},
         ],
     },
 }

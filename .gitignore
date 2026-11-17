@@ -35,3 +35,5 @@ Thumbs.db
 
 # Misc
 node_modules/
+# local infrastructure inventory - never commit
+backend/config.local.py
